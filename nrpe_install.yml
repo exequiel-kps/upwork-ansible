@@ -1,0 +1,94 @@
+---
+- hosts: all
+  user: efernandez
+  become: yes
+  become_user: root
+  
+
+  tasks:
+  - name: Copio archivos RPM | Redhat
+    copy: src=files/nrpe/ dest=/tmp/
+    when: ansible_os_family == "RedHat"
+
+  - name: Instalando Nagios-common | RedHat
+    yum: 
+      name: /tmp/nagios-common-3.5.1-1.el6.x86_64.rpm 
+      state: present
+    when: ansible_os_family == "RedHat"
+
+  - name: Instalando Nagios-plugins | RedHat
+    yum:
+      name: /tmp/nagios-plugins-2.0.3-3.el6.x86_64.rpm
+      state: present
+    when: ansible_os_family == "RedHat"
+
+  - name: Instalando Nrpe | RedHat
+    yum:
+      name: /tmp/nrpe-2.15-7.el6.x86_64.rpm
+      state: present
+    when: ansible_os_family == "RedHat"
+
+  - name: Instalo Nrpe | Ubuntu
+    apt:
+      name: nagios-nrpe-server,nagios-plugins-basic
+      state: present 
+    environment: 
+      http_proxy: http://10.200.189.64:3128
+    when: ansible_os_family == "Debian"
+
+  - name: Dejar persistente nrpe al inicio
+    service: name=nrpe state=started
+    when: ansible_os_family == "RedHat"
+
+  - name: Sudoers NRPE APP
+    lineinfile: 
+      path: /etc/sudoers 
+      state: present 
+      regexp: '^nrpe' 
+      line: 'nrpe ALL = NOPASSWD: /opt/services/monitoring/nagios/check_configurations_app.sh'
+      validate: 'visudo -cf %s'
+
+  - name: Copiando nrpe config | RedHat
+    template: src=files/nrpe.cfg dest=/etc/nagios/nrpe.cfg owner=0 group=0 mode=0644
+    when: ansible_os_family == "RedHat"
+
+  - name: Copiando nrpe config | Ubuntu
+    template: src=files/nrpe_ubuntu.cfg dest=/etc/nagios/nrpe.cfg owner=0 group=0 mode=0644
+    when: ansible_os_family == "Debian"
+    
+  - name: Agrego los scripts de APP
+    copy: src=files/monitoring dest=/opt/services/ owner=root mode=0775
+
+  - name: Modifico el nrpe.cfg
+    lineinfile: 
+     dest: /etc/nagios/nrpe.cfg 
+     state: present
+     regexp: "^include=/opt/"
+     line: 'include=/opt/services/monitoring/nagios/cfg/nrpe_APP_agent.cfg'
+     backup: yes
+   
+  - name: Copio el cfg de APP
+    copy: src=files/nrpe_APP_agent.cfg dest=/opt/services/monitoring/nagios/cfg/nrpe_APP_agent.cfg owner=root mode=0775
+
+  - name: Copio los scripts
+    copy: src={{ item }} dest=/usr/lib64/nagios/plugins/ owner=root mode=0775 
+    with_fileglob: 
+       - files/nagios/*
+#    notify:
+#        - Restart nrpe
+   
+  - name: Restart nrpe | RedHat
+    service: name=nrpe state=restarted 
+    when: ansible_os_family == "RedHat"
+
+  - name: Restart nrpe
+    service: name=nagios-nrpe-server state=restarted
+    when: ansible_os_family == "Debian"
+
+  handlers:
+     - name: Restart nrpe
+       service: name=nrpe state=restarted
+       when: ansible_os_family == "RedHat"
+     - name: Restart nrpe
+       service: name=nagios-nrpe-server state=restarted
+       when: ansible_os_family == "Debian"
