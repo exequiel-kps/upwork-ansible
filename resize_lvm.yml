@@ -1,0 +1,35 @@
+---
+- hosts: all
+  become: yes
+
+  tasks:
+   - name: Increase FS /
+     lvol:
+       vg: vg_os
+       lv: lv_root
+       size: 60G
+       resizefs: true
+
+   - name: Create FS /var/www
+     lvol: 
+       vg: vg_os
+       lv: lv_www
+       size: 100%FREE
+
+   - name: Format /var/www as ext4
+     filesystem:
+       fstype: ext4
+       dev: /dev/mapper/vg_os-lv_www
+
+   - name: Add to fstab
+     lineinfile:
+       dest: /etc/fstab
+       state: present
+       regexp: '^/dev/mapper/vg_os-lv_www'
+       line: '/dev/mapper/vg_os-lv_www   /var/www  ext4    defaults  0 0'
+   - name: Mount
+     mount: 
+       path: /var/www
+       src: /dev/mapper/vg_os-lv_www
+       fstype: ext4
+       state: mounted
