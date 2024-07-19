@@ -1,0 +1,40 @@
+---
+- hosts: all
+  become_user: root
+  become: yes
+
+  vars:
+    - username: '{{ user_name }}'
+    - groupname: '{{ group_name }}'
+    - comentario: '{{ comment }}'
+    - mail: '{{ mail }}'
+  tasks:
+  - name: Create user
+    user:
+      name: "{{ username }}" 
+      shell: "/bin/bash"
+      createhome: yes
+      comment: "{{ comentario }}"
+      group: "{{ groupname }}"
+      password: "{{ 'P4ssw0rd!2024' | password_hash('sha512') }}"
+      update_password: on_create
+
+  - name: Make the user to change the password
+    command: chage -d 0 '{{ username }}'
+
+  - name: Send mail to user
+    mail:
+      host: smtp-server.company.com
+      port: 25
+      from: mail@company.com
+      to: '{{ mail }}'
+      subject: APP | User created | {{ username }}
+      body: |
+        The user {{ username }} was created on APP platform.
+        user: {{ username }}
+        passwd: P4ssw0rd!2024
+        Servers: "{{ play_hosts }}"
+        You will need to change the password on the first login, if you don't do so it will be locked in 48hs.
+    delegate_to: localhost
+    run_once: true
+
